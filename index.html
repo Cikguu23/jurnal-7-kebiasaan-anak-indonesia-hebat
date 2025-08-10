@@ -391,9 +391,14 @@
             <div class="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-8">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold text-gray-800">Dashboard Guru</h2>
-                    <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-300">
-                        Keluar
-                    </button>
+                    <div class="flex gap-2">
+                        <button onclick="loadTeacherData()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                            🔄 Refresh Data
+                        </button>
+                        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                            Keluar
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="mb-6">
@@ -687,6 +692,25 @@
             currentUser = { name, class: teacherClass };
             userRole = 'teacher';
             
+            // Check if this is first time login for this teacher
+            const teacherKey = `${name}-${teacherClass}`;
+            const isFirstLogin = !localStorage.getItem(`teacher_${teacherKey}_logged`);
+            
+            if (isFirstLogin) {
+                // Mark as logged in
+                localStorage.setItem(`teacher_${teacherKey}_logged`, 'true');
+                
+                // Show credential warning
+                setTimeout(() => {
+                    alert(`🔐 PENTING - SIMPAN INFORMASI INI!\n\n` +
+                          `Nama: ${name}\n` +
+                          `Password: @SDN008purnama\n` +
+                          `Kelas: ${teacherClass}\n\n` +
+                          `Harap simpan informasi login ini dengan aman.\n` +
+                          `Password ini berlaku untuk semua guru di SDN 008 Purnama.`);
+                }, 1000);
+            }
+            
             showTeacherDashboard();
         }
 
@@ -900,6 +924,10 @@
         }
 
         function loadTeacherData() {
+            // Reload data from localStorage to ensure we have the latest data
+            studentsData = JSON.parse(localStorage.getItem('studentsData')) || {};
+            habitsData = JSON.parse(localStorage.getItem('habitsData')) || {};
+            
             // Get all students from the same class (including those who have submitted data)
             const classStudents = new Set();
             
@@ -962,6 +990,10 @@
             // Save updated studentsData
             localStorage.setItem('studentsData', JSON.stringify(studentsData));
             
+            console.log('Class Students Found:', classStudentsArray.length);
+            console.log('Active Today:', activeToday);
+            console.log('Habits Data Keys:', Object.keys(habitsData));
+            
             loadStudentsTable();
             loadLeaderboard();
         }
@@ -969,6 +1001,10 @@
         function loadStudentsTable() {
             const tbody = document.getElementById('studentsTableBody');
             tbody.innerHTML = '';
+            
+            // Reload data from localStorage to ensure we have the latest data
+            studentsData = JSON.parse(localStorage.getItem('studentsData')) || {};
+            habitsData = JSON.parse(localStorage.getItem('habitsData')) || {};
             
             // Get all students from the same class (including those who have submitted data)
             const classStudents = new Set();
@@ -1000,6 +1036,17 @@
             
             const today = new Date().toISOString().split('T')[0];
             const classStudentsArray = Array.from(classStudents).sort();
+            
+            if (classStudentsArray.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="10" class="px-4 py-8 text-center text-gray-500">
+                            Belum ada siswa yang mengisi jurnal di kelas ${currentUser.class}
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
             
             classStudentsArray.forEach(studentKey => {
                 const student = studentsData[studentKey];
@@ -1037,6 +1084,8 @@
             
             // Save updated studentsData
             localStorage.setItem('studentsData', JSON.stringify(studentsData));
+            
+            console.log('Table loaded with', classStudentsArray.length, 'students');
         }
 
         function loadLeaderboard() {
@@ -1700,5 +1749,5 @@
             setTimeout(requestNotificationPermission, 2000);
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'96d0177d163b87a8',t:'MTc1NDgzNTE4NC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'96d033d6d16dde08',t:'MTc1NDgzNjM0Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
