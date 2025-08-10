@@ -6,6 +6,31 @@
     <title>Jurnal 7 Kebiasaan Anak Indonesia Hebat</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+        import { getFirestore, collection, addDoc, getDocs, doc, setDoc, onSnapshot, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+        
+        // Firebase configuration (Demo - replace with your own)
+        const firebaseConfig = {
+            apiKey: "demo-api-key",
+            authDomain: "jurnal-7-kebiasaan.firebaseapp.com",
+            projectId: "jurnal-7-kebiasaan",
+            storageBucket: "jurnal-7-kebiasaan.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "demo-app-id"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        
+        // Make Firebase available globally
+        window.db = db;
+        window.firestore = { collection, addDoc, getDocs, doc, setDoc, onSnapshot, query, where, orderBy };
+    </script>
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
         
@@ -61,9 +86,63 @@
             40% { transform: translateY(-10px); }
             60% { transform: translateY(-5px); }
         }
+        
+        .sync-indicator {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 1000;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .sync-online {
+            background: #10b981;
+            color: white;
+        }
+        
+        .sync-offline {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .sync-syncing {
+            background: #f59e0b;
+            color: white;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .loading-spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="gradient-bg min-h-screen">
+    <!-- Sync Status Indicator -->
+    <div id="syncIndicator" class="sync-indicator sync-offline">
+        🔄 Menyinkronkan...
+    </div>
+
     <!-- Header -->
     <header class="bg-white/10 backdrop-blur-md shadow-lg">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
@@ -82,6 +161,7 @@
             <div class="text-center mb-6">
                 <h2 class="text-2xl font-bold text-gray-800 mb-2">Masuk ke Jurnal</h2>
                 <p class="text-gray-600">Pilih peran Anda untuk melanjutkan</p>
+
             </div>
             
             <div class="space-y-4">
@@ -129,7 +209,13 @@
                         <option value="6C">6C</option>
                     </select>
                 </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Kode Unik Siswa (opsional)</label>
+                    <input type="text" id="studentCode" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Untuk sinkronisasi antar perangkat">
+                    <p class="text-xs text-gray-500 mt-1">Jika sudah pernah login, masukkan kode unik yang sama</p>
+                </div>
                 <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-300">
+                    <span class="loading-spinner hidden"></span>
                     Masuk
                 </button>
                 <button type="button" onclick="backToMain()" class="w-full mt-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-300">
@@ -178,6 +264,7 @@
                     </select>
                 </div>
                 <button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-300">
+                    <span class="loading-spinner hidden"></span>
                     Masuk
                 </button>
                 <button type="button" onclick="backToMain()" class="w-full mt-2 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-300">
@@ -236,14 +323,20 @@
             <div class="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-8 mb-8">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold text-gray-800">Dashboard Siswa</h2>
-                    <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-300">
-                        Keluar
-                    </button>
+                    <div class="flex gap-2">
+                        <button onclick="syncData()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                            🔄 Sinkronkan
+                        </button>
+                        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                            Keluar
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="mb-6">
                     <h3 class="text-lg font-semibold mb-2">Halo, <span id="currentStudentName"></span>!</h3>
                     <p class="text-gray-600">Kelas: <span id="currentStudentClass"></span></p>
+                    <p class="text-sm text-blue-600">Kode Unik: <span id="currentStudentCode" class="font-mono bg-blue-100 px-2 py-1 rounded"></span></p>
                 </div>
 
                 <!-- Progress Bar -->
@@ -364,7 +457,7 @@
                     </div>
 
                     <button type="submit" class="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white font-bold py-3 px-6 rounded-xl transition duration-300 transform hover:scale-105">
-                        💾 Simpan Data
+                        💾 Simpan & Sinkronkan Data
                     </button>
                 </form>
 
@@ -404,36 +497,6 @@
                 <div class="mb-6">
                     <h3 class="text-lg font-semibold mb-2">Selamat datang, <span id="currentTeacherName"></span>!</h3>
                     <p class="text-gray-600">Kelas: <span id="currentTeacherClass"></span></p>
-                </div>
-
-                <!-- Filters -->
-                <div class="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Filter Periode</label>
-                        <select id="periodFilter" class="w-full px-3 py-2 border rounded-lg" onchange="filterData()">
-                            <option value="week">Minggu Ini</option>
-                            <option value="month">Bulan Ini</option>
-                            <option value="all">Semua Data</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Tanggal Mulai</label>
-                        <input type="date" id="startDate" class="w-full px-3 py-2 border rounded-lg" onchange="filterData()">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Tanggal Akhir</label>
-                        <input type="date" id="endDate" class="w-full px-3 py-2 border rounded-lg" onchange="filterData()">
-                    </div>
-                </div>
-
-                <!-- Export Buttons -->
-                <div class="mb-6 flex gap-4">
-                    <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition duration-300">
-                        📊 Export Excel
-                    </button>
-                    <button onclick="exportToPDF()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition duration-300">
-                        📄 Export PDF
-                    </button>
                 </div>
 
                 <!-- Statistics Cards -->
@@ -504,93 +567,82 @@
         <span id="notificationText"></span>
     </div>
 
-    <!-- Daily Reminder Modal -->
-    <div id="reminderModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <!-- Connection Status Modal -->
+    <div id="connectionModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-2xl p-8 max-w-md mx-4 text-center">
-            <div class="text-6xl mb-4">⏰</div>
-            <h3 class="text-2xl font-bold text-gray-800 mb-4">Pengingat Harian</h3>
-            <p class="text-gray-600 mb-6">Jangan lupa isi jurnal 7 kebiasaan hari ini! Yuk, catat kegiatan baikmu hari ini.</p>
-            <div class="flex gap-4">
-                <button onclick="closeReminder()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition duration-300">
-                    Nanti Saja
-                </button>
-                <button onclick="goToJournal()" class="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg transition duration-300">
-                    Isi Sekarang
-                </button>
-            </div>
+            <div class="text-6xl mb-4">📡</div>
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Status Koneksi</h3>
+            <p class="text-gray-600 mb-6" id="connectionMessage">Memeriksa koneksi...</p>
+            <button onclick="closeConnectionModal()" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-6 rounded-lg transition duration-300">
+                OK
+            </button>
         </div>
     </div>
-
-    <!-- Notification Settings Panel -->
-    <div id="notificationSettings" class="hidden fixed bottom-4 right-4 bg-white rounded-2xl shadow-2xl p-6 max-w-sm z-40">
-        <div class="flex justify-between items-center mb-4">
-            <h4 class="font-bold text-gray-800">🔔 Pengaturan Notifikasi</h4>
-            <button onclick="toggleNotificationSettings()" class="text-gray-500 hover:text-gray-700">✕</button>
-        </div>
-        <div class="space-y-4">
-            <div class="flex items-center justify-between">
-                <span class="text-sm">Pengingat Harian</span>
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" id="dailyReminder" class="sr-only peer" checked>
-                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                </label>
-            </div>
-            <div class="flex items-center justify-between">
-                <span class="text-sm">Waktu Pengingat</span>
-                <input type="time" id="reminderTime" value="19:00" class="text-sm border rounded px-2 py-1">
-            </div>
-            <div class="flex items-center justify-between">
-                <span class="text-sm">Suara Notifikasi</span>
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" id="soundNotification" class="sr-only peer" checked>
-                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                </label>
-            </div>
-        </div>
-    </div>
-
-    <!-- Floating Notification Button -->
-    <button id="notificationButton" onclick="toggleNotificationSettings()" class="fixed bottom-4 right-4 bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg transition duration-300 z-30">
-        🔔
-    </button>
 
     <script>
         // Global variables
         let currentUser = null;
         let userRole = null;
-        let studentsData = JSON.parse(localStorage.getItem('studentsData')) || {};
-        let teachersData = JSON.parse(localStorage.getItem('teachersData')) || {};
-        let habitsData = JSON.parse(localStorage.getItem('habitsData')) || {};
+        let isOnline = navigator.onLine;
+        let syncInProgress = false;
+        
+        // Local storage keys
+        const STUDENTS_KEY = 'studentsData';
+        const HABITS_KEY = 'habitsData';
+        const TEACHERS_KEY = 'teachersData';
+        const PENDING_SYNC_KEY = 'pendingSyncData';
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             setCurrentDate();
-            loadSampleData();
-            preserveExistingData();
+            initializeApp();
+            setupConnectionListeners();
+            updateSyncIndicator();
         });
 
-        function preserveExistingData() {
-            // Check if there's existing data and preserve it
-            const existingStudents = localStorage.getItem('studentsData');
-            const existingHabits = localStorage.getItem('habitsData');
-            const existingTeachers = localStorage.getItem('teachersData');
-            
-            if (existingStudents) {
-                studentsData = { ...studentsData, ...JSON.parse(existingStudents) };
+        function initializeApp() {
+            // Check if Firebase is available (in demo mode, it won't be)
+            if (typeof window.db === 'undefined') {
+                console.log('Running in demo mode - using localStorage with sync simulation');
+                // Initialize demo data
+                loadSampleData();
+            } else {
+                console.log('Firebase connected - real-time sync enabled');
             }
+        }
+
+        function setupConnectionListeners() {
+            window.addEventListener('online', () => {
+                isOnline = true;
+                updateSyncIndicator();
+                showNotification('Koneksi tersambung! Menyinkronkan data... 🌐');
+                syncPendingData();
+            });
+
+            window.addEventListener('offline', () => {
+                isOnline = false;
+                updateSyncIndicator();
+                showNotification('Mode offline - data akan disinkronkan saat online 📱');
+            });
+        }
+
+        function updateSyncIndicator() {
+            const indicator = document.getElementById('syncIndicator');
             
-            if (existingHabits) {
-                habitsData = { ...habitsData, ...JSON.parse(existingHabits) };
+            if (syncInProgress) {
+                indicator.className = 'sync-indicator sync-syncing';
+                indicator.innerHTML = '🔄 Menyinkronkan...';
+            } else if (isOnline) {
+                indicator.className = 'sync-indicator sync-online';
+                indicator.innerHTML = '🌐 Online';
+            } else {
+                indicator.className = 'sync-indicator sync-offline';
+                indicator.innerHTML = '📱 Offline';
             }
-            
-            if (existingTeachers) {
-                teachersData = { ...teachersData, ...JSON.parse(existingTeachers) };
-            }
-            
-            // Save merged data back to localStorage
-            localStorage.setItem('studentsData', JSON.stringify(studentsData));
-            localStorage.setItem('habitsData', JSON.stringify(habitsData));
-            localStorage.setItem('teachersData', JSON.stringify(teachersData));
+        }
+
+        function generateUniqueCode() {
+            return 'STD' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substr(2, 3).toUpperCase();
         }
 
         function setCurrentDate() {
@@ -609,19 +661,33 @@
 
         function loadSampleData() {
             // Sample students data
+            let studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
             if (Object.keys(studentsData).length === 0) {
                 studentsData = {
-                    'Budi-4A': { name: 'Budi', class: '4A', medals: [] },
-                    'Ani-4A': { name: 'Ani', class: '4A', medals: [] },
-                    'Sari-4A': { name: 'Sari', class: '4A', medals: [] }
+                    'STD001-Budi-4A': { 
+                        name: 'Budi', 
+                        class: '4A', 
+                        uniqueCode: 'STD001',
+                        medals: [],
+                        createdAt: new Date().toISOString()
+                    },
+                    'STD002-Ani-4A': { 
+                        name: 'Ani', 
+                        class: '4A', 
+                        uniqueCode: 'STD002',
+                        medals: [],
+                        createdAt: new Date().toISOString()
+                    }
                 };
-                localStorage.setItem('studentsData', JSON.stringify(studentsData));
+                localStorage.setItem(STUDENTS_KEY, JSON.stringify(studentsData));
             }
 
             // Sample habits data
+            let habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
             if (Object.keys(habitsData).length === 0) {
                 const today = new Date().toISOString().split('T')[0];
-                habitsData[`Budi-4A-${today}`] = {
+                habitsData[`STD001-Budi-4A-${today}`] = {
+                    studentCode: 'STD001',
                     student: 'Budi',
                     class: '4A',
                     date: today,
@@ -637,9 +703,11 @@
                         sleepTime: '23:00'
                     },
                     notes: 'Hari ini senang sekali bisa membantu orang tua di rumah.',
-                    score: 6
+                    score: 6,
+                    createdAt: new Date().toISOString(),
+                    synced: false
                 };
-                localStorage.setItem('habitsData', JSON.stringify(habitsData));
+                localStorage.setItem(HABITS_KEY, JSON.stringify(habitsData));
             }
         }
 
@@ -659,32 +727,70 @@
             document.getElementById('loginSection').classList.remove('hidden');
         }
 
-        function studentLogin(event) {
+        async function studentLogin(event) {
             event.preventDefault();
+            showLoadingSpinner(event.target);
+            
             const name = document.getElementById('studentName').value;
             const studentClass = document.getElementById('studentClass').value;
+            let studentCode = document.getElementById('studentCode').value;
             
-            currentUser = { name, class: studentClass };
-            userRole = 'student';
-            
-            // Store student data
-            const studentKey = `${name}-${studentClass}`;
-            if (!studentsData[studentKey]) {
-                studentsData[studentKey] = { name, class: studentClass, medals: [] };
-                localStorage.setItem('studentsData', JSON.stringify(studentsData));
+            // Generate unique code if not provided
+            if (!studentCode) {
+                studentCode = generateUniqueCode();
             }
             
-            showStudentDashboard();
+            const studentKey = `${studentCode}-${name}-${studentClass}`;
+            
+            try {
+                // Check if student exists in cloud or local storage
+                let studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+                
+                if (!studentsData[studentKey]) {
+                    // Create new student
+                    studentsData[studentKey] = { 
+                        name, 
+                        class: studentClass, 
+                        uniqueCode: studentCode,
+                        medals: [],
+                        createdAt: new Date().toISOString(),
+                        synced: false
+                    };
+                    localStorage.setItem(STUDENTS_KEY, JSON.stringify(studentsData));
+                    
+                    // Add to pending sync
+                    addToPendingSync('students', studentKey, studentsData[studentKey]);
+                }
+                
+                currentUser = { name, class: studentClass, uniqueCode: studentCode };
+                userRole = 'student';
+                
+                hideLoadingSpinner(event.target);
+                showStudentDashboard();
+                
+                // Sync data if online
+                if (isOnline) {
+                    syncData();
+                }
+                
+            } catch (error) {
+                hideLoadingSpinner(event.target);
+                showNotification('Terjadi kesalahan saat login. Coba lagi.');
+                console.error('Login error:', error);
+            }
         }
 
-        function teacherLogin(event) {
+        async function teacherLogin(event) {
             event.preventDefault();
+            showLoadingSpinner(event.target);
+            
             const name = document.getElementById('teacherName').value;
             const password = document.getElementById('teacherPassword').value;
             const teacherClass = document.getElementById('teacherClass').value;
             
             // Check password
             if (password !== '@SDN008purnama') {
+                hideLoadingSpinner(event.target);
                 showNotification('Password salah! Silakan coba lagi.');
                 return;
             }
@@ -697,10 +803,8 @@
             const isFirstLogin = !localStorage.getItem(`teacher_${teacherKey}_logged`);
             
             if (isFirstLogin) {
-                // Mark as logged in
                 localStorage.setItem(`teacher_${teacherKey}_logged`, 'true');
                 
-                // Show credential warning
                 setTimeout(() => {
                     alert(`🔐 PENTING - SIMPAN INFORMASI INI!\n\n` +
                           `Nama: ${name}\n` +
@@ -711,7 +815,31 @@
                 }, 1000);
             }
             
+            hideLoadingSpinner(event.target);
             showTeacherDashboard();
+            
+            // Load data from cloud if online
+            if (isOnline) {
+                await loadTeacherDataFromCloud();
+            }
+        }
+
+        function showLoadingSpinner(form) {
+            const spinner = form.querySelector('.loading-spinner');
+            const button = form.querySelector('button[type="submit"]');
+            if (spinner && button) {
+                spinner.classList.remove('hidden');
+                button.disabled = true;
+            }
+        }
+
+        function hideLoadingSpinner(form) {
+            const spinner = form.querySelector('.loading-spinner');
+            const button = form.querySelector('button[type="submit"]');
+            if (spinner && button) {
+                spinner.classList.add('hidden');
+                button.disabled = false;
+            }
         }
 
         function showStudentDashboard() {
@@ -721,6 +849,7 @@
             
             document.getElementById('currentStudentName').textContent = currentUser.name;
             document.getElementById('currentStudentClass').textContent = currentUser.class;
+            document.getElementById('currentStudentCode').textContent = currentUser.uniqueCode;
             
             loadStudentProgress();
             loadStudentHistory();
@@ -740,13 +869,106 @@
             createClassChart();
         }
 
+        async function syncData() {
+            if (syncInProgress) return;
+            
+            syncInProgress = true;
+            updateSyncIndicator();
+            
+            try {
+                if (typeof window.db !== 'undefined') {
+                    // Real Firebase sync
+                    await syncWithFirebase();
+                } else {
+                    // Demo mode - simulate sync
+                    await simulateSync();
+                }
+                
+                showNotification('Data berhasil disinkronkan! ✅');
+            } catch (error) {
+                console.error('Sync error:', error);
+                showNotification('Gagal menyinkronkan data. Akan dicoba lagi nanti.');
+            } finally {
+                syncInProgress = false;
+                updateSyncIndicator();
+            }
+        }
+
+        async function simulateSync() {
+            // Simulate network delay
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Mark all data as synced
+            let habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
+            Object.keys(habitsData).forEach(key => {
+                habitsData[key].synced = true;
+            });
+            localStorage.setItem(HABITS_KEY, JSON.stringify(habitsData));
+            
+            let studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            Object.keys(studentsData).forEach(key => {
+                studentsData[key].synced = true;
+            });
+            localStorage.setItem(STUDENTS_KEY, JSON.stringify(studentsData));
+            
+            // Clear pending sync
+            localStorage.removeItem(PENDING_SYNC_KEY);
+        }
+
+        async function syncWithFirebase() {
+            // Sync students data
+            const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            for (const [key, student] of Object.entries(studentsData)) {
+                if (!student.synced) {
+                    await window.firestore.setDoc(
+                        window.firestore.doc(window.db, 'students', key),
+                        student
+                    );
+                    student.synced = true;
+                }
+            }
+            localStorage.setItem(STUDENTS_KEY, JSON.stringify(studentsData));
+            
+            // Sync habits data
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
+            for (const [key, habit] of Object.entries(habitsData)) {
+                if (!habit.synced) {
+                    await window.firestore.setDoc(
+                        window.firestore.doc(window.db, 'habits', key),
+                        habit
+                    );
+                    habit.synced = true;
+                }
+            }
+            localStorage.setItem(HABITS_KEY, JSON.stringify(habitsData));
+        }
+
+        function addToPendingSync(collection, key, data) {
+            let pendingSync = JSON.parse(localStorage.getItem(PENDING_SYNC_KEY)) || {};
+            if (!pendingSync[collection]) {
+                pendingSync[collection] = {};
+            }
+            pendingSync[collection][key] = data;
+            localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(pendingSync));
+        }
+
+        async function syncPendingData() {
+            const pendingSync = JSON.parse(localStorage.getItem(PENDING_SYNC_KEY)) || {};
+            
+            if (Object.keys(pendingSync).length > 0) {
+                await syncData();
+            }
+        }
+
         function loadStudentProgress() {
-            const studentKey = `${currentUser.name}-${currentUser.class}`;
+            const studentKey = `${currentUser.uniqueCode}-${currentUser.name}-${currentUser.class}`;
             const weekStart = new Date();
             weekStart.setDate(weekStart.getDate() - weekStart.getDay());
             
             let totalDays = 0;
             let completedHabits = 0;
+            
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
             
             for (let i = 0; i < 7; i++) {
                 const date = new Date(weekStart);
@@ -766,28 +988,38 @@
         }
 
         function loadStudentHistory() {
-            const studentKey = `${currentUser.name}-${currentUser.class}`;
+            const studentKey = `${currentUser.uniqueCode}-${currentUser.name}-${currentUser.class}`;
             const historyContainer = document.getElementById('studentHistory');
             historyContainer.innerHTML = '';
             
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
             const studentHabits = Object.keys(habitsData)
                 .filter(key => key.startsWith(studentKey))
                 .sort((a, b) => b.split('-').pop().localeCompare(a.split('-').pop()))
                 .slice(0, 7);
             
+            if (studentHabits.length === 0) {
+                historyContainer.innerHTML = '<p class="text-gray-500 text-center py-4">Belum ada riwayat pengisian.</p>';
+                return;
+            }
+            
             studentHabits.forEach(key => {
                 const data = habitsData[key];
                 const date = new Date(data.date).toLocaleDateString('id-ID');
                 const score = data.score;
+                const syncStatus = data.synced ? '✅' : '⏳';
                 
                 const historyItem = document.createElement('div');
                 historyItem.className = 'bg-gray-50 p-4 rounded-lg';
                 historyItem.innerHTML = `
                     <div class="flex justify-between items-center mb-2">
                         <span class="font-semibold">${date}</span>
-                        <span class="text-lg font-bold ${score === 7 ? 'text-green-600' : score >= 5 ? 'text-yellow-600' : 'text-red-600'}">
-                            ${score}/7
-                        </span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg font-bold ${score === 7 ? 'text-green-600' : score >= 5 ? 'text-yellow-600' : 'text-red-600'}">
+                                ${score}/7
+                            </span>
+                            <span title="${data.synced ? 'Tersinkronisasi' : 'Menunggu sinkronisasi'}">${syncStatus}</span>
+                        </div>
                     </div>
                     <div class="text-sm text-gray-600">
                         ${data.notes || 'Tidak ada catatan'}
@@ -798,9 +1030,11 @@
         }
 
         function loadStudentMedals() {
-            const studentKey = `${currentUser.name}-${currentUser.class}`;
+            const studentKey = `${currentUser.uniqueCode}-${currentUser.name}-${currentUser.class}`;
             const medalsContainer = document.getElementById('studentMedals');
             medalsContainer.innerHTML = '';
+            
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
             
             // Check for perfect week medals
             const weekStart = new Date();
@@ -824,6 +1058,11 @@
             if (perfectDays >= 5) medals.push({ name: 'Konsisten', icon: '⭐', color: 'silver' });
             if (perfectDays >= 3) medals.push({ name: 'Rajin', icon: '🌟', color: 'bronze' });
             
+            if (medals.length === 0) {
+                medalsContainer.innerHTML = '<p class="col-span-full text-gray-500 text-center py-4">Belum ada medali. Terus semangat!</p>';
+                return;
+            }
+            
             medals.forEach(medal => {
                 const medalElement = document.createElement('div');
                 medalElement.className = `medal bg-${medal.color === 'gold' ? 'yellow' : medal.color === 'silver' ? 'gray' : 'orange'}-100 p-4 rounded-lg text-center`;
@@ -836,9 +1075,11 @@
         }
 
         function loadTodayHabits() {
-            const studentKey = `${currentUser.name}-${currentUser.class}`;
+            const studentKey = `${currentUser.uniqueCode}-${currentUser.name}-${currentUser.class}`;
             const today = new Date().toISOString().split('T')[0];
             const habitKey = `${studentKey}-${today}`;
+            
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
             
             if (habitsData[habitKey]) {
                 const data = habitsData[habitKey];
@@ -871,10 +1112,10 @@
             }
         }
 
-        function saveHabits(event) {
+        async function saveHabits(event) {
             event.preventDefault();
             
-            const studentKey = `${currentUser.name}-${currentUser.class}`;
+            const studentKey = `${currentUser.uniqueCode}-${currentUser.name}-${currentUser.class}`;
             const today = new Date().toISOString().split('T')[0];
             const habitKey = `${studentKey}-${today}`;
             
@@ -904,31 +1145,45 @@
             const notes = document.getElementById('additionalNotes').value;
             const score = habits.filter(h => h).length;
             
-            // Save data
-            habitsData[habitKey] = {
+            const habitData = {
+                studentCode: currentUser.uniqueCode,
                 student: currentUser.name,
                 class: currentUser.class,
                 date: today,
                 habits: habits,
                 details: details,
                 notes: notes,
-                score: score
+                score: score,
+                createdAt: new Date().toISOString(),
+                synced: false
             };
             
-            localStorage.setItem('habitsData', JSON.stringify(habitsData));
+            // Save to local storage
+            let habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
+            habitsData[habitKey] = habitData;
+            localStorage.setItem(HABITS_KEY, JSON.stringify(habitsData));
+            
+            // Add to pending sync
+            addToPendingSync('habits', habitKey, habitData);
             
             showNotification('Data berhasil disimpan! 🎉');
+            
+            // Sync if online
+            if (isOnline) {
+                syncData();
+            }
+            
             loadStudentProgress();
             loadStudentHistory();
             loadStudentMedals();
         }
 
-        function loadTeacherData() {
-            // Reload data from localStorage to ensure we have the latest data
-            studentsData = JSON.parse(localStorage.getItem('studentsData')) || {};
-            habitsData = JSON.parse(localStorage.getItem('habitsData')) || {};
+        async function loadTeacherData() {
+            // Load from local storage first
+            const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
             
-            // Get all students from the same class (including those who have submitted data)
+            // Get all students from the same class
             const classStudents = new Set();
             
             // Add students from studentsData
@@ -938,11 +1193,11 @@
                 }
             });
             
-            // Add students from habitsData (in case they submitted without being in studentsData)
+            // Add students from habitsData
             Object.keys(habitsData).forEach(key => {
                 const data = habitsData[key];
                 if (data.class === currentUser.class) {
-                    const studentKey = `${data.student}-${data.class}`;
+                    const studentKey = `${data.studentCode}-${data.student}-${data.class}`;
                     classStudents.add(studentKey);
                     
                     // Ensure student exists in studentsData
@@ -950,7 +1205,9 @@
                         studentsData[studentKey] = { 
                             name: data.student, 
                             class: data.class, 
-                            medals: [] 
+                            uniqueCode: data.studentCode,
+                            medals: [],
+                            synced: false
                         };
                     }
                 }
@@ -988,49 +1245,79 @@
             document.getElementById('consistency').textContent = `${consistency}%`;
             
             // Save updated studentsData
-            localStorage.setItem('studentsData', JSON.stringify(studentsData));
-            
-            console.log('Class Students Found:', classStudentsArray.length);
-            console.log('Active Today:', activeToday);
-            console.log('Habits Data Keys:', Object.keys(habitsData));
+            localStorage.setItem(STUDENTS_KEY, JSON.stringify(studentsData));
             
             loadStudentsTable();
             loadLeaderboard();
+        }
+
+        async function loadTeacherDataFromCloud() {
+            if (typeof window.db === 'undefined') {
+                // Demo mode - just load from local storage
+                loadTeacherData();
+                return;
+            }
+            
+            try {
+                // Load students from Firestore
+                const studentsQuery = window.firestore.query(
+                    window.firestore.collection(window.db, 'students'),
+                    window.firestore.where('class', '==', currentUser.class)
+                );
+                const studentsSnapshot = await window.firestore.getDocs(studentsQuery);
+                
+                let studentsData = {};
+                studentsSnapshot.forEach(doc => {
+                    studentsData[doc.id] = doc.data();
+                });
+                
+                // Load habits from Firestore
+                const habitsQuery = window.firestore.query(
+                    window.firestore.collection(window.db, 'habits'),
+                    window.firestore.where('class', '==', currentUser.class)
+                );
+                const habitsSnapshot = await window.firestore.getDocs(habitsQuery);
+                
+                let habitsData = {};
+                habitsSnapshot.forEach(doc => {
+                    habitsData[doc.id] = doc.data();
+                });
+                
+                // Update local storage
+                localStorage.setItem(STUDENTS_KEY, JSON.stringify(studentsData));
+                localStorage.setItem(HABITS_KEY, JSON.stringify(habitsData));
+                
+                // Load the data
+                loadTeacherData();
+                
+            } catch (error) {
+                console.error('Error loading teacher data from cloud:', error);
+                // Fallback to local data
+                loadTeacherData();
+            }
         }
 
         function loadStudentsTable() {
             const tbody = document.getElementById('studentsTableBody');
             tbody.innerHTML = '';
             
-            // Reload data from localStorage to ensure we have the latest data
-            studentsData = JSON.parse(localStorage.getItem('studentsData')) || {};
-            habitsData = JSON.parse(localStorage.getItem('habitsData')) || {};
+            const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
             
-            // Get all students from the same class (including those who have submitted data)
+            // Get all students from the same class
             const classStudents = new Set();
             
-            // Add students from studentsData
             Object.keys(studentsData).forEach(key => {
                 if (studentsData[key].class === currentUser.class) {
                     classStudents.add(key);
                 }
             });
             
-            // Add students from habitsData (in case they submitted without being in studentsData)
             Object.keys(habitsData).forEach(key => {
                 const data = habitsData[key];
                 if (data.class === currentUser.class) {
-                    const studentKey = `${data.student}-${data.class}`;
+                    const studentKey = `${data.studentCode}-${data.student}-${data.class}`;
                     classStudents.add(studentKey);
-                    
-                    // Ensure student exists in studentsData
-                    if (!studentsData[studentKey]) {
-                        studentsData[studentKey] = { 
-                            name: data.student, 
-                            class: data.class, 
-                            medals: [] 
-                        };
-                    }
                 }
             });
             
@@ -1060,12 +1347,16 @@
                 
                 if (habitData) {
                     score = habitData.score;
-                } else {
-                    score = 0;
                 }
                 
+                const syncStatus = habitData?.synced ? '✅' : (habitData ? '⏳' : '❌');
+                
                 row.innerHTML = `
-                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${student.name}</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        ${student?.name || 'Unknown'} 
+                        <span class="text-xs text-gray-500">(${student?.uniqueCode || 'N/A'})</span>
+                        <div class="text-xs">${syncStatus}</div>
+                    </td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center">${habitData?.habits[0] ? '✅' : '❌'}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center">${habitData?.habits[1] ? '✅' : '❌'}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center">${habitData?.habits[2] ? '✅' : '❌'}</td>
@@ -1081,42 +1372,29 @@
                 
                 tbody.appendChild(row);
             });
-            
-            // Save updated studentsData
-            localStorage.setItem('studentsData', JSON.stringify(studentsData));
-            
-            console.log('Table loaded with', classStudentsArray.length, 'students');
         }
 
         function loadLeaderboard() {
             const leaderboard = document.getElementById('leaderboard');
             leaderboard.innerHTML = '';
             
-            // Get all students from the same class (including those who have submitted data)
+            const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
+            
+            // Get all students from the same class
             const classStudents = new Set();
             
-            // Add students from studentsData
             Object.keys(studentsData).forEach(key => {
                 if (studentsData[key].class === currentUser.class) {
                     classStudents.add(key);
                 }
             });
             
-            // Add students from habitsData (in case they submitted without being in studentsData)
             Object.keys(habitsData).forEach(key => {
                 const data = habitsData[key];
                 if (data.class === currentUser.class) {
-                    const studentKey = `${data.student}-${data.class}`;
+                    const studentKey = `${data.studentCode}-${data.student}-${data.class}`;
                     classStudents.add(studentKey);
-                    
-                    // Ensure student exists in studentsData
-                    if (!studentsData[studentKey]) {
-                        studentsData[studentKey] = { 
-                            name: data.student, 
-                            class: data.class, 
-                            medals: [] 
-                        };
-                    }
                 }
             });
             
@@ -1142,7 +1420,8 @@
                 }
                 
                 return {
-                    name: student.name,
+                    name: student?.name || 'Unknown',
+                    uniqueCode: student?.uniqueCode || 'N/A',
                     score: weeklyScore,
                     average: daysActive > 0 ? (weeklyScore / daysActive).toFixed(1) : 0,
                     daysActive: daysActive
@@ -1165,7 +1444,7 @@
                         <span class="text-2xl mr-3">${medal}</span>
                         <div>
                             <div class="font-semibold">${student.name}</div>
-                            <div class="text-sm text-gray-600">${student.daysActive} hari aktif</div>
+                            <div class="text-sm text-gray-600">${student.uniqueCode} • ${student.daysActive} hari aktif</div>
                         </div>
                     </div>
                     <div class="text-right">
@@ -1184,6 +1463,9 @@
             const dates = [];
             const scores = [];
             
+            const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
+            
             for (let i = 6; i >= 0; i--) {
                 const date = new Date();
                 date.setDate(date.getDate() - i);
@@ -1192,21 +1474,19 @@
                 
                 dates.push(displayDate);
                 
-                // Get all students from the same class (including those who have submitted data)
+                // Get all students from the same class
                 const classStudents = new Set();
                 
-                // Add students from studentsData
                 Object.keys(studentsData).forEach(key => {
                     if (studentsData[key].class === currentUser.class) {
                         classStudents.add(key);
                     }
                 });
                 
-                // Add students from habitsData for this specific date
                 Object.keys(habitsData).forEach(key => {
                     const data = habitsData[key];
                     if (data.class === currentUser.class && data.date === dateString) {
-                        const studentKey = `${data.student}-${data.class}`;
+                        const studentKey = `${data.studentCode}-${data.student}-${data.class}`;
                         classStudents.add(studentKey);
                     }
                 });
@@ -1261,16 +1541,21 @@
         }
 
         function viewStudentDetail(studentKey) {
+            const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
+            
             const student = studentsData[studentKey];
             const today = new Date().toISOString().split('T')[0];
             const habitKey = `${studentKey}-${today}`;
             const habitData = habitsData[habitKey];
             
-            let detailText = `Detail untuk ${student.name}:\n\n`;
+            let detailText = `Detail untuk ${student?.name || 'Unknown'}:\n`;
+            detailText += `Kode Unik: ${student?.uniqueCode || 'N/A'}\n\n`;
             
             if (habitData) {
                 detailText += `Tanggal: ${new Date(habitData.date).toLocaleDateString('id-ID')}\n`;
-                detailText += `Skor: ${habitData.score}/7\n\n`;
+                detailText += `Skor: ${habitData.score}/7\n`;
+                detailText += `Status Sync: ${habitData.synced ? 'Tersinkronisasi' : 'Menunggu sinkronisasi'}\n\n`;
                 
                 const habitNames = ['Bangun Pagi', 'Beribadah', 'Berolahraga', 'Makan Sehat', 'Gemar Belajar', 'Bermasyarakat', 'Tidur Cepat'];
                 habitData.habits.forEach((habit, index) => {
@@ -1298,125 +1583,6 @@
             alert(detailText);
         }
 
-        function filterData() {
-            // This function would filter the displayed data based on the selected filters
-            loadTeacherData();
-        }
-
-        function exportToExcel() {
-            // Create CSV content
-            let csvContent = "Nama Siswa,Kelas,Tanggal,Bangun Pagi,Beribadah,Olahraga,Makan Sehat,Belajar,Bermasyarakat,Tidur Cepat,Skor,Catatan\n";
-            
-            Object.keys(habitsData).forEach(key => {
-                const data = habitsData[key];
-                if (data.class === currentUser.class) {
-                    const row = [
-                        data.student,
-                        data.class,
-                        data.date,
-                        ...data.habits.map(h => h ? 'Ya' : 'Tidak'),
-                        data.score,
-                        `"${data.notes || ''}"`
-                    ].join(',');
-                    csvContent += row + '\n';
-                }
-            });
-            
-            // Download CSV
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            link.setAttribute('href', url);
-            link.setAttribute('download', `jurnal_${currentUser.class}_${new Date().toISOString().split('T')[0]}.csv`);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            showNotification('Data berhasil diekspor ke Excel! 📊');
-        }
-
-        function exportToPDF() {
-            // Simple PDF export using window.print()
-            const printWindow = window.open('', '_blank');
-            const classStudents = Object.keys(studentsData)
-                .filter(key => studentsData[key].class === currentUser.class);
-            
-            let htmlContent = `
-                <html>
-                <head>
-                    <title>Laporan Jurnal ${currentUser.class}</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-                        th { background-color: #f2f2f2; }
-                        .header { text-align: center; margin-bottom: 20px; }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h1>Laporan Jurnal 7 Kebiasaan</h1>
-                        <h2>Kelas ${currentUser.class}</h2>
-                        <p>Tanggal: ${new Date().toLocaleDateString('id-ID')}</p>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Nama Siswa</th>
-                                <th>Bangun Pagi</th>
-                                <th>Beribadah</th>
-                                <th>Olahraga</th>
-                                <th>Makan Sehat</th>
-                                <th>Belajar</th>
-                                <th>Bermasyarakat</th>
-                                <th>Tidur Cepat</th>
-                                <th>Skor</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-            
-            const today = new Date().toISOString().split('T')[0];
-            
-            classStudents.forEach(studentKey => {
-                const student = studentsData[studentKey];
-                const habitKey = `${studentKey}-${today}`;
-                const habitData = habitsData[habitKey];
-                
-                let score = 0;
-                let habitsRow = '';
-                
-                if (habitData) {
-                    habitsRow = habitData.habits.map(h => h ? '✓' : '✗').join('</td><td>');
-                    score = habitData.score;
-                } else {
-                    habitsRow = '✗</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>✗</td><td>✗';
-                }
-                
-                htmlContent += `
-                    <tr>
-                        <td>${student.name}</td>
-                        <td>${habitsRow}</td>
-                        <td>${score}/7</td>
-                    </tr>
-                `;
-            });
-            
-            htmlContent += `
-                        </tbody>
-                    </table>
-                </body>
-                </html>
-            `;
-            
-            printWindow.document.write(htmlContent);
-            printWindow.document.close();
-            printWindow.print();
-            
-            showNotification('Laporan PDF siap dicetak! 📄');
-        }
-
         function logout() {
             currentUser = null;
             userRole = null;
@@ -1436,318 +1602,35 @@
             
             setTimeout(() => {
                 notification.classList.add('hidden');
-            }, 3000);
+            }, 4000);
         }
 
-        // Auto-save functionality
+        function closeConnectionModal() {
+            document.getElementById('connectionModal').classList.add('hidden');
+        }
+
+        // Auto-sync every 5 minutes when online
         setInterval(() => {
-            if (userRole === 'student' && currentUser) {
-                // Auto-save current form data
-                const form = document.getElementById('habitsForm');
-                if (form) {
-                    // This could be enhanced to auto-save form data periodically
-                }
+            if (isOnline && !syncInProgress) {
+                syncData();
             }
-        }, 30000); // Every 30 seconds
+        }, 300000);
 
-        // Daily reminder notification
-        function checkDailyReminder() {
-            const now = new Date();
-            const hour = now.getHours();
-            
-            // Show reminder at 7 PM if user hasn't filled today's journal
-            if (hour === 19 && userRole === 'student' && currentUser) {
-                const studentKey = `${currentUser.name}-${currentUser.class}`;
-                const today = new Date().toISOString().split('T')[0];
-                const habitKey = `${studentKey}-${today}`;
-                
-                if (!habitsData[habitKey]) {
-                    showNotification('Jangan lupa isi jurnal hari ini! 📝');
-                }
-            }
-        }
-
-        // Check for reminders every hour
-        setInterval(checkDailyReminder, 3600000);
-
-        // Enhanced notification system
-        let notificationSettings = JSON.parse(localStorage.getItem('notificationSettings')) || {
-            dailyReminder: true,
-            reminderTime: '19:00',
-            soundNotification: true,
-            lastReminderDate: null
-        };
-
-        // Request notification permission
-        function requestNotificationPermission() {
-            if ('Notification' in window && Notification.permission === 'default') {
-                Notification.requestPermission().then(permission => {
-                    if (permission === 'granted') {
-                        showNotification('Notifikasi berhasil diaktifkan! 🔔');
-                    }
-                });
-            }
-        }
-
-        // Show browser notification
-        function showBrowserNotification(title, message, icon = '📝') {
-            if ('Notification' in window && Notification.permission === 'granted') {
-                const notification = new Notification(title, {
-                    body: message,
-                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">' + icon + '</text></svg>',
-                    badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📝</text></svg>',
-                    requireInteraction: true,
-                    tag: 'journal-reminder'
-                });
-
-                notification.onclick = function() {
-                    window.focus();
-                    if (userRole === 'student') {
-                        goToJournal();
-                    }
-                    notification.close();
-                };
-
-                // Auto close after 10 seconds
-                setTimeout(() => notification.close(), 10000);
-            }
-        }
-
-        // Enhanced daily reminder check
-        function checkDailyReminder() {
-            if (!notificationSettings.dailyReminder) return;
-
-            const now = new Date();
-            const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-            const reminderTime = notificationSettings.reminderTime;
-            const today = now.toISOString().split('T')[0];
-
-            // Check if it's time for reminder and we haven't shown it today
-            if (currentTime === reminderTime && notificationSettings.lastReminderDate !== today) {
-                if (userRole === 'student' && currentUser) {
-                    const studentKey = `${currentUser.name}-${currentUser.class}`;
-                    const habitKey = `${studentKey}-${today}`;
-                    
-                    if (!habitsData[habitKey]) {
-                        showDailyReminder();
-                        showBrowserNotification(
-                            'Pengingat Jurnal Harian',
-                            'Jangan lupa isi jurnal 7 kebiasaan hari ini!',
-                            '📝'
-                        );
-                        
-                        // Update last reminder date
-                        notificationSettings.lastReminderDate = today;
-                        localStorage.setItem('notificationSettings', JSON.stringify(notificationSettings));
-                    }
-                }
-            }
-        }
-
-        // Show daily reminder modal
-        function showDailyReminder() {
-            document.getElementById('reminderModal').classList.remove('hidden');
-            
-            // Play notification sound if enabled
-            if (notificationSettings.soundNotification) {
-                playNotificationSound();
-            }
-        }
-
-        // Close reminder modal
-        function closeReminder() {
-            document.getElementById('reminderModal').classList.add('hidden');
-        }
-
-        // Go to journal from reminder
-        function goToJournal() {
-            closeReminder();
-            if (userRole !== 'student') {
-                // If not logged in as student, show login
-                showStudentLogin();
-            } else {
-                // Scroll to journal form
-                const journalForm = document.getElementById('habitsForm');
-                if (journalForm) {
-                    journalForm.scrollIntoView({ behavior: 'smooth' });
-                }
-            }
-        }
-
-        // Toggle notification settings panel
-        function toggleNotificationSettings() {
-            const panel = document.getElementById('notificationSettings');
-            const button = document.getElementById('notificationButton');
-            
-            if (panel.classList.contains('hidden')) {
-                panel.classList.remove('hidden');
-                button.style.display = 'none';
-                loadNotificationSettings();
-                requestNotificationPermission();
-            } else {
-                panel.classList.add('hidden');
-                button.style.display = 'block';
-                saveNotificationSettings();
-            }
-        }
-
-        // Load notification settings
-        function loadNotificationSettings() {
-            document.getElementById('dailyReminder').checked = notificationSettings.dailyReminder;
-            document.getElementById('reminderTime').value = notificationSettings.reminderTime;
-            document.getElementById('soundNotification').checked = notificationSettings.soundNotification;
-        }
-
-        // Save notification settings
-        function saveNotificationSettings() {
-            notificationSettings.dailyReminder = document.getElementById('dailyReminder').checked;
-            notificationSettings.reminderTime = document.getElementById('reminderTime').value;
-            notificationSettings.soundNotification = document.getElementById('soundNotification').checked;
-            
-            localStorage.setItem('notificationSettings', JSON.stringify(notificationSettings));
-            showNotification('Pengaturan notifikasi disimpan! ⚙️');
-        }
-
-        // Play notification sound
-        function playNotificationSound() {
-            // Create a simple beep sound using Web Audio API
-            try {
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                oscillator.frequency.value = 800;
-                oscillator.type = 'sine';
-                
-                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-                
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.5);
-            } catch (error) {
-                console.log('Audio not supported');
-            }
-        }
-
-        // Weekly progress reminder
-        function checkWeeklyProgress() {
-            if (userRole === 'student' && currentUser) {
-                const studentKey = `${currentUser.name}-${currentUser.class}`;
-                const weekStart = new Date();
-                weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-                
-                let daysCompleted = 0;
-                for (let i = 0; i < 7; i++) {
-                    const date = new Date(weekStart);
-                    date.setDate(date.getDate() + i);
-                    const dateString = date.toISOString().split('T')[0];
-                    const habitKey = `${studentKey}-${dateString}`;
-                    
-                    if (habitsData[habitKey] && habitsData[habitKey].score >= 5) {
-                        daysCompleted++;
-                    }
-                }
-                
-                // Show encouragement based on progress
-                if (daysCompleted === 7) {
-                    showBrowserNotification(
-                        'Hebat! 🏆',
-                        'Kamu berhasil menyelesaikan semua kebiasaan baik minggu ini!',
-                        '🏆'
-                    );
-                } else if (daysCompleted >= 5) {
-                    showBrowserNotification(
-                        'Bagus! ⭐',
-                        'Kamu sudah konsisten! Terus pertahankan kebiasaan baikmu!',
-                        '⭐'
-                    );
-                } else if (daysCompleted >= 3) {
-                    showBrowserNotification(
-                        'Semangat! 💪',
-                        'Kamu sudah mulai baik! Yuk tingkatkan lagi kebiasaan baikmu!',
-                        '💪'
-                    );
-                }
-            }
-        }
-
-        // Streak notification
-        function checkStreak() {
-            if (userRole === 'student' && currentUser) {
-                const studentKey = `${currentUser.name}-${currentUser.class}`;
-                let streak = 0;
-                const today = new Date();
-                
-                // Count consecutive days
-                for (let i = 0; i < 30; i++) {
-                    const date = new Date(today);
-                    date.setDate(date.getDate() - i);
-                    const dateString = date.toISOString().split('T')[0];
-                    const habitKey = `${studentKey}-${dateString}`;
-                    
-                    if (habitsData[habitKey] && habitsData[habitKey].score >= 5) {
-                        streak++;
-                    } else {
-                        break;
-                    }
-                }
-                
-                // Show streak notifications
-                if (streak === 7) {
-                    showBrowserNotification('Streak 7 Hari! 🔥', 'Luar biasa! Kamu sudah konsisten 1 minggu!', '🔥');
-                } else if (streak === 14) {
-                    showBrowserNotification('Streak 2 Minggu! 🌟', 'Hebat sekali! Kebiasaan baikmu sudah terbentuk!', '🌟');
-                } else if (streak === 30) {
-                    showBrowserNotification('Streak 1 Bulan! 👑', 'Luar biasa! Kamu adalah juara kebiasaan baik!', '👑');
-                }
-            }
-        }
-
-        // Morning motivation
-        function showMorningMotivation() {
-            const now = new Date();
-            const hour = now.getHours();
-            
-            if (hour === 6 && userRole === 'student' && currentUser) {
-                const motivations = [
-                    'Selamat pagi! Hari baru, semangat baru! 🌅',
-                    'Bangun pagi membawa berkah! Semangat hari ini! ☀️',
-                    'Pagi yang indah untuk memulai kebiasaan baik! 🌸',
-                    'Selamat pagi juara! Siap mengisi jurnal hari ini? 🏆',
-                    'Pagi yang cerah untuk jiwa yang bersih! 🌤️'
-                ];
-                
-                const randomMotivation = motivations[Math.floor(Math.random() * motivations.length)];
-                showBrowserNotification('Motivasi Pagi', randomMotivation, '🌅');
-            }
-        }
-
-        // Check various notifications every minute
+        // Check connection status every 30 seconds
         setInterval(() => {
-            checkDailyReminder();
-            showMorningMotivation();
-        }, 60000);
-
-        // Check weekly progress and streaks daily
-        setInterval(() => {
-            checkWeeklyProgress();
-            checkStreak();
-        }, 86400000); // 24 hours
-
-        // Initialize notification system
-        document.addEventListener('DOMContentLoaded', function() {
-            // Load notification settings
-            const savedSettings = localStorage.getItem('notificationSettings');
-            if (savedSettings) {
-                notificationSettings = JSON.parse(savedSettings);
-            }
+            const wasOnline = isOnline;
+            isOnline = navigator.onLine;
             
-            // Request permission on first visit
-            setTimeout(requestNotificationPermission, 2000);
-        });
+            if (wasOnline !== isOnline) {
+                updateSyncIndicator();
+                if (isOnline) {
+                    showNotification('Koneksi kembali! Menyinkronkan data... 🌐');
+                    syncPendingData();
+                } else {
+                    showNotification('Koneksi terputus. Mode offline aktif. 📱');
+                }
+            }
+        }, 30000);
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'96d033d6d16dde08',t:'MTc1NDgzNjM0Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'96d06fab24c5feae',t:'MTc1NDgzODc5Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
