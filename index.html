@@ -67,9 +67,11 @@
     <!-- Header -->
     <header class="bg-white/10 backdrop-blur-md shadow-lg">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-            <img src="https://iili.io/FLZp1qP.md.png" alt="Logo Kiri" class="h-12 w-auto">
+            <div class="flex items-center space-x-4">
+                <img src="https://iili.io/FLZp1qP.md.png" alt="Logo Kiri" class="h-12 w-auto">
+            </div>
             <h1 class="text-white text-xl font-bold text-center flex-1">Jurnal 7 Kebiasaan Anak Indonesia Hebat</h1>
-            <img src="https://iili.io/FNzF6fR.png" alt="Logo Kanan" class="h-12 w-auto">
+            <img src="https://iili.io/FLmkjSI.png" alt="Logo Sekolah" class="h-12 w-auto">
         </div>
     </header>
 
@@ -143,6 +145,10 @@
                 <div class="mb-4">
                     <label class="block text-gray-700 text-sm font-bold mb-2">Nama Guru</label>
                     <input type="text" id="teacherName" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-green-500" required>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                    <input type="password" id="teacherPassword" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-green-500" required>
                 </div>
                 <div class="mb-4">
                     <label class="block text-gray-700 text-sm font-bold mb-2">Kelas yang Diampu</label>
@@ -493,6 +499,56 @@
         <span id="notificationText"></span>
     </div>
 
+    <!-- Daily Reminder Modal -->
+    <div id="reminderModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl p-8 max-w-md mx-4 text-center">
+            <div class="text-6xl mb-4">⏰</div>
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Pengingat Harian</h3>
+            <p class="text-gray-600 mb-6">Jangan lupa isi jurnal 7 kebiasaan hari ini! Yuk, catat kegiatan baikmu hari ini.</p>
+            <div class="flex gap-4">
+                <button onclick="closeReminder()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition duration-300">
+                    Nanti Saja
+                </button>
+                <button onclick="goToJournal()" class="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg transition duration-300">
+                    Isi Sekarang
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Settings Panel -->
+    <div id="notificationSettings" class="hidden fixed bottom-4 right-4 bg-white rounded-2xl shadow-2xl p-6 max-w-sm z-40">
+        <div class="flex justify-between items-center mb-4">
+            <h4 class="font-bold text-gray-800">🔔 Pengaturan Notifikasi</h4>
+            <button onclick="toggleNotificationSettings()" class="text-gray-500 hover:text-gray-700">✕</button>
+        </div>
+        <div class="space-y-4">
+            <div class="flex items-center justify-between">
+                <span class="text-sm">Pengingat Harian</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="dailyReminder" class="sr-only peer" checked>
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                </label>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-sm">Waktu Pengingat</span>
+                <input type="time" id="reminderTime" value="19:00" class="text-sm border rounded px-2 py-1">
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-sm">Suara Notifikasi</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="soundNotification" class="sr-only peer" checked>
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Notification Button -->
+    <button id="notificationButton" onclick="toggleNotificationSettings()" class="fixed bottom-4 right-4 bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg transition duration-300 z-30">
+        🔔
+    </button>
+
     <script>
         // Global variables
         let currentUser = null;
@@ -505,7 +561,32 @@
         document.addEventListener('DOMContentLoaded', function() {
             setCurrentDate();
             loadSampleData();
+            preserveExistingData();
         });
+
+        function preserveExistingData() {
+            // Check if there's existing data and preserve it
+            const existingStudents = localStorage.getItem('studentsData');
+            const existingHabits = localStorage.getItem('habitsData');
+            const existingTeachers = localStorage.getItem('teachersData');
+            
+            if (existingStudents) {
+                studentsData = { ...studentsData, ...JSON.parse(existingStudents) };
+            }
+            
+            if (existingHabits) {
+                habitsData = { ...habitsData, ...JSON.parse(existingHabits) };
+            }
+            
+            if (existingTeachers) {
+                teachersData = { ...teachersData, ...JSON.parse(existingTeachers) };
+            }
+            
+            // Save merged data back to localStorage
+            localStorage.setItem('studentsData', JSON.stringify(studentsData));
+            localStorage.setItem('habitsData', JSON.stringify(habitsData));
+            localStorage.setItem('teachersData', JSON.stringify(teachersData));
+        }
 
         function setCurrentDate() {
             const today = new Date();
@@ -594,7 +675,14 @@
         function teacherLogin(event) {
             event.preventDefault();
             const name = document.getElementById('teacherName').value;
+            const password = document.getElementById('teacherPassword').value;
             const teacherClass = document.getElementById('teacherClass').value;
+            
+            // Check password
+            if (password !== '@SDN008purnama') {
+                showNotification('Password salah! Silakan coba lagi.');
+                return;
+            }
             
             currentUser = { name, class: teacherClass };
             userRole = 'teacher';
@@ -812,28 +900,54 @@
         }
 
         function loadTeacherData() {
-            const classStudents = Object.keys(studentsData)
-                .filter(key => studentsData[key].class === currentUser.class);
+            // Get all students from the same class (including those who have submitted data)
+            const classStudents = new Set();
             
-            document.getElementById('totalStudents').textContent = classStudents.length;
+            // Add students from studentsData
+            Object.keys(studentsData).forEach(key => {
+                if (studentsData[key].class === currentUser.class) {
+                    classStudents.add(key);
+                }
+            });
+            
+            // Add students from habitsData (in case they submitted without being in studentsData)
+            Object.keys(habitsData).forEach(key => {
+                const data = habitsData[key];
+                if (data.class === currentUser.class) {
+                    const studentKey = `${data.student}-${data.class}`;
+                    classStudents.add(studentKey);
+                    
+                    // Ensure student exists in studentsData
+                    if (!studentsData[studentKey]) {
+                        studentsData[studentKey] = { 
+                            name: data.student, 
+                            class: data.class, 
+                            medals: [] 
+                        };
+                    }
+                }
+            });
+            
+            const classStudentsArray = Array.from(classStudents);
+            document.getElementById('totalStudents').textContent = classStudentsArray.length;
             
             // Count active students today
             const today = new Date().toISOString().split('T')[0];
-            const activeToday = classStudents.filter(studentKey => {
+            const activeToday = classStudentsArray.filter(studentKey => {
                 const habitKey = `${studentKey}-${today}`;
                 return habitsData[habitKey];
             }).length;
             
             document.getElementById('activeToday').textContent = activeToday;
             
-            // Calculate average score
+            // Calculate average score for today
             let totalScore = 0;
             let totalEntries = 0;
             
-            Object.keys(habitsData).forEach(key => {
-                const data = habitsData[key];
-                if (data.class === currentUser.class) {
-                    totalScore += data.score;
+            classStudentsArray.forEach(studentKey => {
+                const habitKey = `${studentKey}-${today}`;
+                if (habitsData[habitKey]) {
+                    totalScore += habitsData[habitKey].score;
                     totalEntries++;
                 }
             });
@@ -842,8 +956,11 @@
             document.getElementById('averageScore').textContent = averageScore;
             
             // Calculate consistency
-            const consistency = classStudents.length > 0 ? Math.round((activeToday / classStudents.length) * 100) : 0;
+            const consistency = classStudentsArray.length > 0 ? Math.round((activeToday / classStudentsArray.length) * 100) : 0;
             document.getElementById('consistency').textContent = `${consistency}%`;
+            
+            // Save updated studentsData
+            localStorage.setItem('studentsData', JSON.stringify(studentsData));
             
             loadStudentsTable();
             loadLeaderboard();
@@ -853,12 +970,38 @@
             const tbody = document.getElementById('studentsTableBody');
             tbody.innerHTML = '';
             
-            const classStudents = Object.keys(studentsData)
-                .filter(key => studentsData[key].class === currentUser.class);
+            // Get all students from the same class (including those who have submitted data)
+            const classStudents = new Set();
+            
+            // Add students from studentsData
+            Object.keys(studentsData).forEach(key => {
+                if (studentsData[key].class === currentUser.class) {
+                    classStudents.add(key);
+                }
+            });
+            
+            // Add students from habitsData (in case they submitted without being in studentsData)
+            Object.keys(habitsData).forEach(key => {
+                const data = habitsData[key];
+                if (data.class === currentUser.class) {
+                    const studentKey = `${data.student}-${data.class}`;
+                    classStudents.add(studentKey);
+                    
+                    // Ensure student exists in studentsData
+                    if (!studentsData[studentKey]) {
+                        studentsData[studentKey] = { 
+                            name: data.student, 
+                            class: data.class, 
+                            medals: [] 
+                        };
+                    }
+                }
+            });
             
             const today = new Date().toISOString().split('T')[0];
+            const classStudentsArray = Array.from(classStudents).sort();
             
-            classStudents.forEach(studentKey => {
+            classStudentsArray.forEach(studentKey => {
                 const student = studentsData[studentKey];
                 const habitKey = `${studentKey}-${today}`;
                 const habitData = habitsData[habitKey];
@@ -866,14 +1009,12 @@
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-gray-50';
                 
-                let habitsDisplay = '';
                 let score = 0;
                 
                 if (habitData) {
-                    habitsDisplay = habitData.habits.map(h => h ? '✅' : '❌').join(' ');
                     score = habitData.score;
                 } else {
-                    habitsDisplay = '❌ ❌ ❌ ❌ ❌ ❌ ❌';
+                    score = 0;
                 }
                 
                 row.innerHTML = `
@@ -885,7 +1026,7 @@
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center">${habitData?.habits[4] ? '✅' : '❌'}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center">${habitData?.habits[5] ? '✅' : '❌'}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center">${habitData?.habits[6] ? '✅' : '❌'}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-sm text-center font-bold ${score === 7 ? 'text-green-600' : score >= 5 ? 'text-yellow-600' : 'text-red-600'}">${score}/7</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-center font-bold ${score === 7 ? 'text-green-600' : score >= 5 ? 'text-yellow-600' : score >= 1 ? 'text-orange-600' : 'text-red-600'}">${score}/7</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-center">
                         <button onclick="viewStudentDetail('${studentKey}')" class="text-blue-600 hover:text-blue-900">Detail</button>
                     </td>
@@ -893,20 +1034,48 @@
                 
                 tbody.appendChild(row);
             });
+            
+            // Save updated studentsData
+            localStorage.setItem('studentsData', JSON.stringify(studentsData));
         }
 
         function loadLeaderboard() {
             const leaderboard = document.getElementById('leaderboard');
             leaderboard.innerHTML = '';
             
-            const classStudents = Object.keys(studentsData)
-                .filter(key => studentsData[key].class === currentUser.class);
+            // Get all students from the same class (including those who have submitted data)
+            const classStudents = new Set();
+            
+            // Add students from studentsData
+            Object.keys(studentsData).forEach(key => {
+                if (studentsData[key].class === currentUser.class) {
+                    classStudents.add(key);
+                }
+            });
+            
+            // Add students from habitsData (in case they submitted without being in studentsData)
+            Object.keys(habitsData).forEach(key => {
+                const data = habitsData[key];
+                if (data.class === currentUser.class) {
+                    const studentKey = `${data.student}-${data.class}`;
+                    classStudents.add(studentKey);
+                    
+                    // Ensure student exists in studentsData
+                    if (!studentsData[studentKey]) {
+                        studentsData[studentKey] = { 
+                            name: data.student, 
+                            class: data.class, 
+                            medals: [] 
+                        };
+                    }
+                }
+            });
             
             // Calculate weekly scores for each student
             const weekStart = new Date();
             weekStart.setDate(weekStart.getDate() - weekStart.getDay());
             
-            const studentScores = classStudents.map(studentKey => {
+            const studentScores = Array.from(classStudents).map(studentKey => {
                 const student = studentsData[studentKey];
                 let weeklyScore = 0;
                 let daysActive = 0;
@@ -930,6 +1099,11 @@
                     daysActive: daysActive
                 };
             }).sort((a, b) => b.score - a.score);
+            
+            if (studentScores.length === 0) {
+                leaderboard.innerHTML = '<p class="text-gray-500 text-center py-4">Belum ada data siswa yang mengisi jurnal.</p>';
+                return;
+            }
             
             studentScores.forEach((student, index) => {
                 const position = index + 1;
@@ -969,14 +1143,29 @@
                 
                 dates.push(displayDate);
                 
-                // Calculate average score for this date
-                const classStudents = Object.keys(studentsData)
-                    .filter(key => studentsData[key].class === currentUser.class);
+                // Get all students from the same class (including those who have submitted data)
+                const classStudents = new Set();
+                
+                // Add students from studentsData
+                Object.keys(studentsData).forEach(key => {
+                    if (studentsData[key].class === currentUser.class) {
+                        classStudents.add(key);
+                    }
+                });
+                
+                // Add students from habitsData for this specific date
+                Object.keys(habitsData).forEach(key => {
+                    const data = habitsData[key];
+                    if (data.class === currentUser.class && data.date === dateString) {
+                        const studentKey = `${data.student}-${data.class}`;
+                        classStudents.add(studentKey);
+                    }
+                });
                 
                 let totalScore = 0;
                 let activeStudents = 0;
                 
-                classStudents.forEach(studentKey => {
+                Array.from(classStudents).forEach(studentKey => {
                     const habitKey = `${studentKey}-${dateString}`;
                     if (habitsData[habitKey]) {
                         totalScore += habitsData[habitKey].score;
@@ -1231,6 +1420,285 @@
 
         // Check for reminders every hour
         setInterval(checkDailyReminder, 3600000);
+
+        // Enhanced notification system
+        let notificationSettings = JSON.parse(localStorage.getItem('notificationSettings')) || {
+            dailyReminder: true,
+            reminderTime: '19:00',
+            soundNotification: true,
+            lastReminderDate: null
+        };
+
+        // Request notification permission
+        function requestNotificationPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        showNotification('Notifikasi berhasil diaktifkan! 🔔');
+                    }
+                });
+            }
+        }
+
+        // Show browser notification
+        function showBrowserNotification(title, message, icon = '📝') {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const notification = new Notification(title, {
+                    body: message,
+                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">' + icon + '</text></svg>',
+                    badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📝</text></svg>',
+                    requireInteraction: true,
+                    tag: 'journal-reminder'
+                });
+
+                notification.onclick = function() {
+                    window.focus();
+                    if (userRole === 'student') {
+                        goToJournal();
+                    }
+                    notification.close();
+                };
+
+                // Auto close after 10 seconds
+                setTimeout(() => notification.close(), 10000);
+            }
+        }
+
+        // Enhanced daily reminder check
+        function checkDailyReminder() {
+            if (!notificationSettings.dailyReminder) return;
+
+            const now = new Date();
+            const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+            const reminderTime = notificationSettings.reminderTime;
+            const today = now.toISOString().split('T')[0];
+
+            // Check if it's time for reminder and we haven't shown it today
+            if (currentTime === reminderTime && notificationSettings.lastReminderDate !== today) {
+                if (userRole === 'student' && currentUser) {
+                    const studentKey = `${currentUser.name}-${currentUser.class}`;
+                    const habitKey = `${studentKey}-${today}`;
+                    
+                    if (!habitsData[habitKey]) {
+                        showDailyReminder();
+                        showBrowserNotification(
+                            'Pengingat Jurnal Harian',
+                            'Jangan lupa isi jurnal 7 kebiasaan hari ini!',
+                            '📝'
+                        );
+                        
+                        // Update last reminder date
+                        notificationSettings.lastReminderDate = today;
+                        localStorage.setItem('notificationSettings', JSON.stringify(notificationSettings));
+                    }
+                }
+            }
+        }
+
+        // Show daily reminder modal
+        function showDailyReminder() {
+            document.getElementById('reminderModal').classList.remove('hidden');
+            
+            // Play notification sound if enabled
+            if (notificationSettings.soundNotification) {
+                playNotificationSound();
+            }
+        }
+
+        // Close reminder modal
+        function closeReminder() {
+            document.getElementById('reminderModal').classList.add('hidden');
+        }
+
+        // Go to journal from reminder
+        function goToJournal() {
+            closeReminder();
+            if (userRole !== 'student') {
+                // If not logged in as student, show login
+                showStudentLogin();
+            } else {
+                // Scroll to journal form
+                const journalForm = document.getElementById('habitsForm');
+                if (journalForm) {
+                    journalForm.scrollIntoView({ behavior: 'smooth' });
+                }
+            }
+        }
+
+        // Toggle notification settings panel
+        function toggleNotificationSettings() {
+            const panel = document.getElementById('notificationSettings');
+            const button = document.getElementById('notificationButton');
+            
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                button.style.display = 'none';
+                loadNotificationSettings();
+                requestNotificationPermission();
+            } else {
+                panel.classList.add('hidden');
+                button.style.display = 'block';
+                saveNotificationSettings();
+            }
+        }
+
+        // Load notification settings
+        function loadNotificationSettings() {
+            document.getElementById('dailyReminder').checked = notificationSettings.dailyReminder;
+            document.getElementById('reminderTime').value = notificationSettings.reminderTime;
+            document.getElementById('soundNotification').checked = notificationSettings.soundNotification;
+        }
+
+        // Save notification settings
+        function saveNotificationSettings() {
+            notificationSettings.dailyReminder = document.getElementById('dailyReminder').checked;
+            notificationSettings.reminderTime = document.getElementById('reminderTime').value;
+            notificationSettings.soundNotification = document.getElementById('soundNotification').checked;
+            
+            localStorage.setItem('notificationSettings', JSON.stringify(notificationSettings));
+            showNotification('Pengaturan notifikasi disimpan! ⚙️');
+        }
+
+        // Play notification sound
+        function playNotificationSound() {
+            // Create a simple beep sound using Web Audio API
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (error) {
+                console.log('Audio not supported');
+            }
+        }
+
+        // Weekly progress reminder
+        function checkWeeklyProgress() {
+            if (userRole === 'student' && currentUser) {
+                const studentKey = `${currentUser.name}-${currentUser.class}`;
+                const weekStart = new Date();
+                weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+                
+                let daysCompleted = 0;
+                for (let i = 0; i < 7; i++) {
+                    const date = new Date(weekStart);
+                    date.setDate(date.getDate() + i);
+                    const dateString = date.toISOString().split('T')[0];
+                    const habitKey = `${studentKey}-${dateString}`;
+                    
+                    if (habitsData[habitKey] && habitsData[habitKey].score >= 5) {
+                        daysCompleted++;
+                    }
+                }
+                
+                // Show encouragement based on progress
+                if (daysCompleted === 7) {
+                    showBrowserNotification(
+                        'Hebat! 🏆',
+                        'Kamu berhasil menyelesaikan semua kebiasaan baik minggu ini!',
+                        '🏆'
+                    );
+                } else if (daysCompleted >= 5) {
+                    showBrowserNotification(
+                        'Bagus! ⭐',
+                        'Kamu sudah konsisten! Terus pertahankan kebiasaan baikmu!',
+                        '⭐'
+                    );
+                } else if (daysCompleted >= 3) {
+                    showBrowserNotification(
+                        'Semangat! 💪',
+                        'Kamu sudah mulai baik! Yuk tingkatkan lagi kebiasaan baikmu!',
+                        '💪'
+                    );
+                }
+            }
+        }
+
+        // Streak notification
+        function checkStreak() {
+            if (userRole === 'student' && currentUser) {
+                const studentKey = `${currentUser.name}-${currentUser.class}`;
+                let streak = 0;
+                const today = new Date();
+                
+                // Count consecutive days
+                for (let i = 0; i < 30; i++) {
+                    const date = new Date(today);
+                    date.setDate(date.getDate() - i);
+                    const dateString = date.toISOString().split('T')[0];
+                    const habitKey = `${studentKey}-${dateString}`;
+                    
+                    if (habitsData[habitKey] && habitsData[habitKey].score >= 5) {
+                        streak++;
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Show streak notifications
+                if (streak === 7) {
+                    showBrowserNotification('Streak 7 Hari! 🔥', 'Luar biasa! Kamu sudah konsisten 1 minggu!', '🔥');
+                } else if (streak === 14) {
+                    showBrowserNotification('Streak 2 Minggu! 🌟', 'Hebat sekali! Kebiasaan baikmu sudah terbentuk!', '🌟');
+                } else if (streak === 30) {
+                    showBrowserNotification('Streak 1 Bulan! 👑', 'Luar biasa! Kamu adalah juara kebiasaan baik!', '👑');
+                }
+            }
+        }
+
+        // Morning motivation
+        function showMorningMotivation() {
+            const now = new Date();
+            const hour = now.getHours();
+            
+            if (hour === 6 && userRole === 'student' && currentUser) {
+                const motivations = [
+                    'Selamat pagi! Hari baru, semangat baru! 🌅',
+                    'Bangun pagi membawa berkah! Semangat hari ini! ☀️',
+                    'Pagi yang indah untuk memulai kebiasaan baik! 🌸',
+                    'Selamat pagi juara! Siap mengisi jurnal hari ini? 🏆',
+                    'Pagi yang cerah untuk jiwa yang bersih! 🌤️'
+                ];
+                
+                const randomMotivation = motivations[Math.floor(Math.random() * motivations.length)];
+                showBrowserNotification('Motivasi Pagi', randomMotivation, '🌅');
+            }
+        }
+
+        // Check various notifications every minute
+        setInterval(() => {
+            checkDailyReminder();
+            showMorningMotivation();
+        }, 60000);
+
+        // Check weekly progress and streaks daily
+        setInterval(() => {
+            checkWeeklyProgress();
+            checkStreak();
+        }, 86400000); // 24 hours
+
+        // Initialize notification system
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load notification settings
+            const savedSettings = localStorage.getItem('notificationSettings');
+            if (savedSettings) {
+                notificationSettings = JSON.parse(savedSettings);
+            }
+            
+            // Request permission on first visit
+            setTimeout(requestNotificationPermission, 2000);
+        });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'96cfa426959348fa',t:'MTc1NDgzMDQ2MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'96d0177d163b87a8',t:'MTc1NDgzNTE4NC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
