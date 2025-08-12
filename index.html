@@ -968,7 +968,6 @@
             try {
                 if (!isOnline || !supabase) throw new Error("Koneksi internet diperlukan untuk menyimpan.");
 
-                // PERBAIKAN: Cek dulu apakah data sudah ada, lalu update atau insert
                 const { data: existingHabit, error: selectError } = await supabase
                     .from('habits')
                     .select('id')
@@ -976,19 +975,17 @@
                     .eq('date', today)
                     .single();
 
-                if (selectError && selectError.code !== 'PGRST116') { // Abaikan error 'not found'
+                if (selectError && selectError.code !== 'PGRST116') {
                     throw selectError;
                 }
 
                 if (existingHabit) {
-                    // Jika ada, UPDATE
                     const { error: updateError } = await supabase
                         .from('habits')
                         .update(habitData)
                         .eq('id', existingHabit.id);
                     if (updateError) throw updateError;
                 } else {
-                    // Jika tidak ada, INSERT
                     const { error: insertError } = await supabase
                         .from('habits')
                         .insert(habitData);
@@ -1066,7 +1063,7 @@
             }
         }
 
-        // --- FUNGSI ASLI ANDA (TIDAK DIUBAH) ---
+        // --- FUNGSI ASLI ANDA (DENGAN PERBAIKAN) ---
         function showInitialView() {
             const lastUser = JSON.parse(localStorage.getItem('currentUser'));
             const lastRole = localStorage.getItem('userRole');
@@ -1086,7 +1083,10 @@
 
         function showStudentLogin() { toggleView(['studentLoginForm', 'loginSection']); }
         function showTeacherLogin() { toggleView(['teacherLoginForm', 'loginSection']); }
-        function backToMain() { toggleView(['homepageDashboard', 'habitsDisplay', 'loginSection']); document.getElementById('loginSection').classList.remove('hidden'); }
+        function backToMain() { 
+            toggleView(['homepageDashboard', 'habitsDisplay', 'loginSection']);
+            document.getElementById('loginSection').classList.remove('hidden'); // Memastikan form login utama terlihat
+        }
         function showStudentDashboard() {
             document.getElementById('currentStudentName').textContent = currentUser.name;
             document.getElementById('currentStudentClass').textContent = currentUser.class;
@@ -1366,12 +1366,95 @@
             loadRecapData();
         }
 
-        function loadRecapData() { /* ... kode asli Anda ... */ }
-        function refreshRecapData() { /* ... kode asli Anda ... */ }
-        function deleteAllStudents() { /* ... kode asli Anda ... */ }
-        function deleteAllJournals() { /* ... kode asli Anda ... */ }
-        function resetAllMedals() { /* ... kode asli Anda ... */ }
-        function resetAllClassData() { /* ... kode asli Anda ... */ }
+        function loadRecapData() {
+            const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
+            const classStudents = Object.values(studentsData).filter(s => s.class === currentUser.class);
+            document.getElementById('recapTotalStudents').textContent = classStudents.length;
+            const classJournalEntries = Object.values(habitsData).filter(h => h.class === currentUser.class).length;
+            document.getElementById('recapTotalJournals').textContent = classJournalEntries;
+            let totalMedals = 0;
+            Object.values(habitsData).forEach(habit => {
+                if (habit.class === currentUser.class && habit.score === 7) {
+                    totalMedals++;
+                }
+            });
+            document.getElementById('recapTotalMedals').textContent = totalMedals;
+        }
+        
+        function refreshRecapData() {
+            loadRecapData();
+            showNotification('Data rekap berhasil dimuat ulang!', 'info');
+        }
+
+        async function deleteAllStudents() {
+            if (!confirm(`⚠️ PERINGATAN! Anda akan menghapus SEMUA siswa di kelas ${currentUser.class}. Tindakan ini tidak dapat dibatalkan. Lanjutkan?`)) return;
+            try {
+                const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+                const studentCodesToDelete = Object.values(studentsData)
+                    .filter(s => s.class === currentUser.class)
+                    .map(s => s.unique_code);
+                
+                if (studentCodesToDelete.length === 0) {
+                    showNotification('Tidak ada siswa untuk dihapus.', 'info');
+                    return;
+                }
+
+                const { error } = await supabase.from('students').delete().in('unique_code', studentCodesToDelete);
+                if (error) throw error;
+                showNotification(`Semua siswa di kelas ${currentUser.class} telah dihapus.`, 'success');
+                await refreshTeacherData();
+            } catch (error) {
+                showNotification('Gagal menghapus siswa.', 'error');
+                console.error(error);
+            }
+        }
+
+        async function deleteAllJournals() {
+            if (!confirm(`⚠️ PERINGATAN! Anda akan menghapus SEMUA jurnal di kelas ${currentUser.class}. Tindakan ini tidak dapat dibatalkan. Lanjutkan?`)) return;
+            try {
+                const { error } = await supabase.from('habits').delete().eq('class', currentUser.class);
+                if (error) throw error;
+                showNotification(`Semua jurnal di kelas ${currentUser.class} telah dihapus.`, 'success');
+                await refreshTeacherData();
+            } catch (error) {
+                showNotification('Gagal menghapus jurnal.', 'error');
+                console.error(error);
+            }
+        }
+
+        async function resetAllMedals() {
+            if (!confirm(`⚠️ PERINGATAN! Anda akan mereset SEMUA medali di kelas ${currentUser.class}. Lanjutkan?`)) return;
+            try {
+                const { error } = await supabase.from('students').update({ medals: [] }).eq('class', currentUser.class);
+                if (error) throw error;
+                showNotification(`Semua medali di kelas ${currentUser.class} telah direset.`, 'success');
+                await refreshTeacherData();
+            } catch (error) {
+                showNotification('Gagal mereset medali.', 'error');
+                console.error(error);
+            }
+        }
+
+        async function resetAllClassData() {
+            if (!confirm(`🚨 PERINGATAN KERAS! Anda akan menghapus SEMUA SISWA DAN JURNAL di kelas ${currentUser.class}. Tindakan ini tidak dapat dibatalkan. Lanjutkan?`)) return;
+            try {
+                const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+                const studentCodesToDelete = Object.values(studentsData)
+                    .filter(s => s.class === currentUser.class)
+                    .map(s => s.unique_code);
+
+                if (studentCodesToDelete.length > 0) {
+                    const { error } = await supabase.from('students').delete().in('unique_code', studentCodesToDelete);
+                    if (error) throw error;
+                }
+                showNotification(`Semua data untuk kelas ${currentUser.class} telah direset.`, 'success');
+                await refreshTeacherData();
+            } catch (error) {
+                showNotification('Gagal mereset data kelas.', 'error');
+                console.error(error);
+            }
+        }
         
         async function loadTeacherDataFromCloud() {
             await syncAndFetchData();
@@ -1405,11 +1488,61 @@
             });
         }
 
-        function loadLeaderboard() { /* ... kode asli Anda ... */ }
+        function loadLeaderboard() {
+             const leaderboard = document.getElementById('leaderboard');
+            leaderboard.innerHTML = '';
+            const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
+            const classStudents = Object.values(studentsData).filter(s => s.class === currentUser.class);
+            const weekStart = new Date();
+            weekStart.setDate(weekStart.getDate() - (weekStart.getDay() === 0 ? 6 : weekStart.getDay() - 1));
+            weekStart.setHours(0,0,0,0);
+            const studentScores = classStudents.map(student => {
+                const weeklyHabits = Object.values(habitsData).filter(h => {
+                    return h.student_code === student.unique_code && new Date(h.date) >= weekStart;
+                });
+                const weeklyScore = weeklyHabits.reduce((sum, h) => sum + h.score, 0);
+                return { name: student.name, score: weeklyScore, days: weeklyHabits.length };
+            }).sort((a, b) => b.score - a.score);
+            if (studentScores.length === 0 || studentScores.every(s => s.score === 0)) {
+                leaderboard.innerHTML = '<p class="text-gray-500 text-center py-4">Belum ada data ranking minggu ini.</p>';
+                return;
+            }
+            studentScores.forEach((student, index) => {
+                const position = index + 1;
+                const medal = position === 1 ? '🥇' : position === 2 ? '🥈' : position === 3 ? '🥉' : `<span>${position}</span>`;
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center p-3 bg-gray-50 rounded-lg mb-2';
+                item.innerHTML = `<div class="flex items-center"><div class="text-2xl mr-4 w-8 text-center">${medal}</div><div><div class="font-semibold">${student.name}</div><div class="text-xs text-gray-500">${student.days} hari aktif</div></div></div><div class="text-xl font-bold">${student.score} Poin</div>`;
+                leaderboard.appendChild(item);
+            });
+        }
         function createClassChart() { /* ... kode asli Anda ... */ }
         function viewStudentDetail(studentCode) { /* ... kode asli Anda ... */ }
-        function deleteJournalEntry(studentCode, date) { /* ... kode asli Anda ... */ }
-        function deleteStudent(studentCode) { /* ... kode asli Anda ... */ }
+        async function deleteJournalEntry(studentCode, date) {
+            if (!confirm(`Anda yakin ingin menghapus jurnal untuk tanggal ini?`)) return;
+            try {
+                const { error } = await supabase.from('habits').delete().eq('student_code', studentCode).eq('date', date);
+                if (error) throw error;
+                showNotification('Jurnal berhasil dihapus.', 'success');
+                await refreshTeacherData();
+            } catch (error) {
+                showNotification('Gagal menghapus jurnal.', 'error');
+                console.error(error);
+            }
+        }
+        async function deleteStudent(studentCode) {
+            if (!confirm(`PERINGATAN! Anda akan menghapus siswa ini beserta seluruh riwayat jurnalnya. Tindakan ini tidak dapat dibatalkan. Lanjutkan?`)) return;
+            try {
+                const { error } = await supabase.from('students').delete().eq('unique_code', studentCode);
+                if (error) throw error;
+                showNotification('Siswa berhasil dihapus.', 'success');
+                await refreshTeacherData();
+            } catch (error) {
+                showNotification('Gagal menghapus siswa.', 'error');
+                console.error(error);
+            }
+        }
         function closeConnectionModal() { /* ... kode asli Anda ... */ }
         function exportToExcel() { /* ... kode asli Anda ... */ }
         function exportToPDF() { /* ... kode asli Anda ... */ }
