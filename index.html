@@ -1518,8 +1518,76 @@
                 leaderboard.appendChild(item);
             });
         }
-        function createClassChart() { /* ... kode asli Anda ... */ }
-        function viewStudentDetail(studentCode) { /* ... kode asli Anda ... */ }
+        function createClassChart() {
+            const ctx = document.getElementById('classChart').getContext('2d');
+            const dates = [];
+            const scores = [];
+            const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateString = date.toISOString().split('T')[0];
+                const displayDate = date.toLocaleDateString('id-ID', { month: 'short', day: 'numeric' });
+                dates.push(displayDate);
+                const classStudents = Object.values(studentsData).filter(s => s.class === currentUser.class);
+                let totalScore = 0;
+                let activeStudents = 0;
+                classStudents.forEach(student => {
+                    const habit = Object.values(habitsData).find(h => h.student_code === student.unique_code && h.date === dateString);
+                    if (habit) {
+                        totalScore += habit.score;
+                        activeStudents++;
+                    }
+                });
+                const averageScore = activeStudents > 0 ? totalScore / activeStudents : 0;
+                scores.push(averageScore);
+            }
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Rata-rata Skor Kelas',
+                        data: scores,
+                        borderColor: 'rgb(34, 197, 94)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: { responsive: true, scales: { y: { beginAtZero: true, max: 7 } } }
+            });
+        }
+        
+        function viewStudentDetail(studentCode) {
+            const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
+            const student = Object.values(studentsData).find(s => s.unique_code === studentCode);
+            if (!student) {
+                alert('Siswa tidak ditemukan.');
+                return;
+            }
+
+            let detailText = `Riwayat Jurnal untuk ${student.name}:\n\n`;
+            const studentHabits = Object.values(habitsData)
+                .filter(habit => habit.student_code === studentCode)
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            if (studentHabits.length === 0) {
+                detailText += "Belum ada riwayat jurnal.";
+            } else {
+                studentHabits.slice(0, 7).forEach(habit => {
+                    const date = new Date(habit.date);
+                    const dateString = date.toLocaleDateString('id-ID', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' });
+                    detailText += `--- ${dateString} ---\n`;
+                    detailText += `Skor: ${habit.score}/7\n`;
+                    detailText += `Catatan: ${habit.notes || '-'}\n\n`;
+                });
+            }
+            alert(detailText);
+        }
+
         async function deleteJournalEntry(studentCode, date) {
             if (!confirm(`Anda yakin ingin menghapus jurnal untuk tanggal ini?`)) return;
             try {
@@ -1544,9 +1612,68 @@
                 console.error(error);
             }
         }
-        function closeConnectionModal() { /* ... kode asli Anda ... */ }
-        function exportToExcel() { /* ... kode asli Anda ... */ }
-        function exportToPDF() { /* ... kode asli Anda ... */ }
+        function closeConnectionModal() {
+            document.getElementById('connectionModal').classList.add('hidden');
+        }
+        function exportToExcel() {
+            const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
+            const classStudents = Object.values(studentsData).filter(s => s.class === currentUser.class);
+            
+            const excelData = [];
+            const habitNames = ['Bangun Pagi', 'Beribadah', 'Olahraga', 'Makan Sehat', 'Belajar', 'Bermasyarakat', 'Tidur Cepat'];
+            excelData.push(['Nama Siswa', 'Kelas', 'Tanggal', ...habitNames, 'Skor', 'Catatan']);
+
+            classStudents.forEach(student => {
+                const studentHabits = Object.values(habitsData).filter(h => h.student_code === student.unique_code);
+                studentHabits.forEach(habit => {
+                    excelData.push([
+                        student.name,
+                        student.class,
+                        habit.date,
+                        ...habit.habits.map(h => h ? 'Ya' : 'Tidak'),
+                        habit.score,
+                        habit.notes || ''
+                    ]);
+                });
+            });
+
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(excelData);
+            XLSX.utils.book_append_sheet(wb, ws, `Jurnal Kelas ${currentUser.class}`);
+            XLSX.writeFile(wb, `Jurnal Kelas ${currentUser.class}.xlsx`);
+            showNotification('File Excel berhasil diunduh!', 'success');
+        }
+        function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            const studentsData = JSON.parse(localStorage.getItem(STUDENTS_KEY)) || {};
+            const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
+            const classStudents = Object.values(studentsData).filter(s => s.class === currentUser.class);
+            const today = new Date().toISOString().split('T')[0];
+
+            doc.text(`Laporan Jurnal Kelas ${currentUser.class}`, 14, 16);
+            doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 14, 22);
+
+            const tableColumn = ["Nama Siswa", "Skor Hari Ini"];
+            const tableRows = [];
+
+            classStudents.forEach(student => {
+                const todaysHabit = Object.values(habitsData).find(h => h.student_code === student.unique_code && h.date === today);
+                const score = todaysHabit ? `${todaysHabit.score}/7` : 'Belum isi';
+                const row = [student.name, score];
+                tableRows.push(row);
+            });
+
+            doc.autoTable({
+                head: [tableColumn],
+                body: tableRows,
+                startY: 30
+            });
+            doc.save(`Laporan Jurnal Kelas ${currentUser.class}.pdf`);
+            showNotification('File PDF berhasil diunduh!', 'success');
+        }
 
     </script>
 </body>
