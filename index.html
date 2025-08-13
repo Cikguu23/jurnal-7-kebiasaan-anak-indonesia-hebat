@@ -1371,6 +1371,7 @@
             const habitsData = JSON.parse(localStorage.getItem(HABITS_KEY)) || {};
             const classStudents = Object.values(studentsData).filter(s => s.class === currentUser.class);
             document.getElementById('recapTotalStudents').textContent = classStudents.length;
+            document.getElementById('recapClassName').textContent = `Kelas ${currentUser.class}`;
             const classJournalEntries = Object.values(habitsData).filter(h => h.class === currentUser.class).length;
             document.getElementById('recapTotalJournals').textContent = classJournalEntries;
             let totalMedals = 0;
